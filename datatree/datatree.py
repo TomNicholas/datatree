@@ -320,6 +320,17 @@ class DataTree(
         DataTree.from_dict
         """
 
+        # set empty placeholders first
+        self._name = None
+        self._parent = None
+        self._children = OrderedDict()
+        self._variables = {}
+        self._coord_names = set()
+        self._dims = {}
+        self._indexes = {}
+        self._attrs = {}
+        self._encoding = {}
+
         # validate input
         if children is None:
             children = {}
@@ -327,8 +338,8 @@ class DataTree(
         _check_for_name_collisions(children, ds.variables)
 
         # set tree attributes
-        super().__init__(children=children)
         self.name = name
+        super().__init__(children=children)
         self.parent = parent
 
         # set data attributes
@@ -341,6 +352,7 @@ class DataTree(
             attrs=ds._attrs,
             encoding=ds._encoding,
         )
+
         self._close = ds._close
 
     @property
@@ -401,7 +413,7 @@ class DataTree(
         children with duplicate names (or a data variable with the same name as a child).
         """
         super()._pre_attach(parent)
-        if self.name in list(parent.ds.variables):
+        if self.name in list(parent.variables):
             raise KeyError(
                 f"parent {parent.name} already contains a data variable named {self.name}"
             )
@@ -730,11 +742,23 @@ class DataTree(
         else:
             raise ValueError("Invalid format for key")
 
-    def update(self, other: Dataset | Mapping[str, DataTree | DataArray]) -> None:
+    def update(
+        self, other: DataTree | Dataset | Mapping[str, DataTree | DataArray | Variable]
+    ) -> None:
         """
         Update this node's children and / or variables.
 
         Just like `dict.update` this is an in-place operation.
+
+        Parameters
+        ----------
+        other : DataTree, Dataset or mapping
+            Variables and or child nodes with which to update this dataset. One of:
+
+            - Dataset
+            - mapping {var name: DataTree}
+            - mapping {var name: DataArray}
+            - mapping {var name: Variable}
         """
         # TODO separate by type
         new_children = {}
@@ -743,7 +767,6 @@ class DataTree(
             if isinstance(v, DataTree):
                 new_children[k] = v
             elif isinstance(v, (DataArray, Variable)):
-                # TODO this should also accommodate other types that can be coerced into Variables
                 new_variables[k] = v
             else:
                 raise TypeError(f"Type {type(v)} cannot be assigned to a DataTree")
@@ -751,6 +774,7 @@ class DataTree(
         vars_merge_result = dataset_update_method(self.to_dataset(), new_variables)
         # TODO are there any subtleties with preserving order of children like this?
         merged_children = OrderedDict(**self.children, **new_children)
+        DataTree._check_children(merged_children)
         self._replace(
             inplace=True, children=merged_children, **vars_merge_result._asdict()
         )
