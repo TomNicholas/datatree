@@ -166,6 +166,16 @@ class TestUpdate:
         expected = da.rename("results")
         xrt.assert_equal(folder1["results"], expected)
 
+    def test_update_with_datatree(self):
+        other_dt = DataTree(
+            data=xr.Dataset({"a": 0, "b": 1}), children={"c": DataTree()}
+        )
+        folder1 = DataTree(name="folder1")
+        folder1.update(other_dt)
+        xrt.assert_equal(folder1["a"], xr.DataArray(0))
+        xrt.assert_equal(folder1["b"], xr.DataArray(1))
+        dtt.assert_equal(folder1["c"], DataTree(), from_root=False)
+
 
 class TestCopy:
     def test_copy(self, create_test_datatree):
